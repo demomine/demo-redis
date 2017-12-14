@@ -5,15 +5,19 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.Tuple;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class DelayQueueDemo {
     private static final String DELAY_QUEUE = "delay_queue";
+    final JedisLock lock;
     final Jedis jedis;
 
-    public DelayQueueDemo(Jedis jedis) {
+    public DelayQueueDemo(Jedis jedis,JedisLock jedisLock) {
         this.jedis = jedis;
+        this.lock = jedisLock;
     }
 
     public void delay(List<Task> tasks) {
@@ -28,16 +32,19 @@ public class DelayQueueDemo {
     public void transferFromDelayQueue() throws InterruptedException{
         while(true){
             try {
-                Set<Tuple> item = jedis.zrangeWithScores(DELAY_QUEUE, 0, 0);
+                lock.acquire();
+                Set<Tuple> item = jedis.zrangeWithScores(DELAY_QUEUE, 0, 3);
+                List<String> tasks = new ArrayList<>();
                 if(item != null && !item.isEmpty()){
-                    Tuple tuple = item.iterator().next();
-                    if(System.currentTimeMillis() >= tuple.getScore()){
-                        // TODO 获取锁
-                        jedis.zrem(DELAY_QUEUE, tuple.getElement()); // 从延时队列中移除
-                        process(tuple.getElement()); //任务推入延时队列，因为这里只是延时
-                        // TODO 释放锁
-                    }
+                    item.forEach(tuple -> {
+                        if(System.currentTimeMillis() >= tuple.getScore()){
+                            jedis.zrem(DELAY_QUEUE, tuple.getElement()); // 从延时队列中移除
+                            tasks.add(tuple.getElement());
+                        }
+                    });
                 }
+                lock.release();
+                process(tasks);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -47,8 +54,13 @@ public class DelayQueueDemo {
         }
     }
 
-    private void process(String element) {
-        System.out.println("process" + element);
+    private void process(List<String> element) {
+        element.forEach(task-> System.out.println("process" + task));
+        try {
+            TimeUnit.SECONDS.sleep(5);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
 

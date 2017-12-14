@@ -17,12 +17,14 @@ public class DelayQueueDemoTest {
 
     private Jedis jedis;
     private JedisPool pool;
+    private JedisLock jedisLock;
     private static final String QUEUE_NAME = "deplay_queue";
 
     @Before
     public void setUp() {
         pool = new JedisPool(new JedisPoolConfig(), "120.26.164.41",6379,60000,"Xinb@918testRedis");
         jedis = pool.getResource();
+        jedisLock = new JedisLock(jedis, "delay_key", 1000, 30000);
     }
 
     @After
@@ -33,9 +35,9 @@ public class DelayQueueDemoTest {
 
     @Test
     public void delay() throws Exception{
-        DelayQueueDemo delayQueueDemo = new DelayQueueDemo(jedis);
+        DelayQueueDemo delayQueueDemo = new DelayQueueDemo(jedis,jedisLock);
         List<DelayQueueDemo.Task> tasks = getTask();
-        //delayQueueDemo.delay(tasks);
+        delayQueueDemo.delay(tasks);
         delayQueueDemo.transferFromDelayQueue();
 
     }
@@ -45,7 +47,7 @@ public class DelayQueueDemoTest {
         List<DelayQueueDemo.Task> tasks = new ArrayList<>();
 
         DelayQueueDemo.Task task1 = new DelayQueueDemo.Task("task1", time, "task 1 process");
-        DelayQueueDemo.Task task2 = new DelayQueueDemo.Task("task2", time=time+20000D, "task 2 process");
+        DelayQueueDemo.Task task2 = new DelayQueueDemo.Task("task2", time=time+10000D, "task 2 process");
         DelayQueueDemo.Task task3 = new DelayQueueDemo.Task("task3", time=time+1000D, "task 3 process");
         DelayQueueDemo.Task task4 = new DelayQueueDemo.Task("task4", time=time+1000D, "task 4 process");
         DelayQueueDemo.Task task5 = new DelayQueueDemo.Task("task5", time=time+1000D, "task 5 process");
